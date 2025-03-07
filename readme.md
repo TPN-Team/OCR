@@ -37,7 +37,7 @@ Step 3: Activate the Virtual Environment:
 
 ```bash
 # window cmd
-.venv\Scripts\activate
+.venv\Scripts\activate.bat
 # or
 # window powershell
 Set-ExecutionPolicy Unrestricted -Scope Process
