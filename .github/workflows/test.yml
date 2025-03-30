@@ -39,20 +39,6 @@ jobs:
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
         shell: powershell
 
-      - name: Copy test images (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p images
-          cp -r test/* images/
-        shell: bash
-
-      - name: Copy test images (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          if (!(Test-Path images)) { New-Item -ItemType Directory -Path images }
-          Copy-Item -Path test\* -Destination images\ -Recurse
-        shell: powershell
-
       - name: Remove existing output_subtitles.ass (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -66,16 +52,16 @@ jobs:
         shell: powershell
 
       - name: Run test
-        run: python ocr.py --no-filter
+        run: python run.py --img_dir test
 
       - name: Check if output_subtitles.ass exists (Linux)
         if: runner.os == 'Linux'
         run: |
-          if [ ! -f output_subtitles.ass ]; then echo "output_subtitles.ass not found!" && exit 1; fi
+          if [ ! -f outputs/output_subtitles.ass ]; then echo "output_subtitles.ass not found!" && exit 1; fi
         shell: bash
 
       - name: Check if output_subtitles.ass exists (Windows)
         if: runner.os == 'Windows'
         run: |
-          if (!(Test-Path output_subtitles.ass)) { Write-Host "output_subtitles.ass not found!"; exit 1 }
+          if (!(Test-Path outputs/output_subtitles.ass)) { Write-Host "output_subtitles.ass not found!"; exit 1 }
         shell: powershell
