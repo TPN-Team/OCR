@@ -7,6 +7,8 @@
     - [For Windows](#for-windows)
     - [For Arch linux](#for-arch-linux)
   - [Usage](#usage)
+    - [Vapoursynth Method](#vapoursynth-method)
+    - [VideoSubFinder Method](#videosubfinder-method)
   - [TODO](#todo)
   - [Acknowledgement](#acknowledgement)
 
@@ -14,11 +16,10 @@
 
 ## How it work?
 
-Diff a hardsubbed video with video that is not hardsubbed to detect subtitle frames.
+Diff a hardsubbed video with video that is not hardsubbed to detect subtitles frames (Default: VapourSynth).
+Another way is using VideoSubFinder to extract subtitles frames.
 Extract these frames as images and OCR them using Google Lens.
 Integrate the resulting text into an SRT subtitle file.
-
-Also compatible with VideoSubFinder by using `no-filter` arg.
 
 ## Accuracy
 
@@ -102,6 +103,7 @@ pip install vsjetpack vspreview
 
 ## Usage
 
+### Vapoursynth Method
 Prepare two sources.
 
 - Muse HardSubed from YouTube, should choose 720p AVC format.
@@ -111,13 +113,15 @@ Prepare two sources.
 Two sources must be synchronized. If not, adjust offset arguments.
 
 ```sh
-python ocr.py clean.mkv sub.mp4
+python run.py clean.mkv sub.mp4
 ```
 
-For more.
-
+Batch mode
+Prepare 2 folder, one is contain HardSub, another is contain Non HardSubed.
+Episode naming between 2 folder must be the same. 
+Give program the path to 2 folder above.
 ```sh
-python ocr.py --help
+python run.py clean sub
 ```
 
 For non-Muse sources, it is necessary to adjust the crop parameters to an
@@ -131,15 +135,26 @@ filter = Filter(r"clean.mkv", 0, r"sub.mkv", 0, images_dir=Path("images"))
 python -m vspreview filter.py
 ```
 
-If two sources is hard to sync, then use VSF instead to generate clear images
-then put it into `images` folder. After that use this tool with `--no-filter` args. 
-With this you no need to install vapoursynth.
+### VideoSubFinder Method
+
+If two sources is hard to sync, then use VSF instead to generate subtitles frame.
+
+```sh
+python run.py --engine videosubfinder -vsf {Path to VideoSubFinderWXW} -i {Path to Video Directory or Video File}
+```
+If Windows VideoSubFinderWXW path must have ".exe" suffix. eg: blabla/VideoSubFinderWXW.exe.
+
+If VideoSubFinderWXW already in Path then you no need to specify path to VideoSubFinderWXW.
+
+
+For more VideoSubFinder tunning param.
+```sh
+python run.py --help
+```
 
 ## TODO
 
-- Support VideoSubFinder.
-- Better batch support and docs for batch mode.
-- Implement concat OCR (Merge an amount of image into one and OCR then get result base on coordinates. This would have better performance) (Need help) 
+- Implement concat OCR (Merge an amount of image into one and OCR then get result base on coordinates. This would have better performance) (Need help).
 
 ## Acknowledgement
 
