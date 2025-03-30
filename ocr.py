@@ -92,7 +92,7 @@ class OCR_Subtitles:
         output_subtitles_name: str,
         output_directory: str,
         images_dir_override: str | None = None, 
-    ) -> tuple[str, str]:
+    ) -> tuple[Path, Path]:
         try:
             output_path = Path(output_directory).resolve()
             if images_dir_override:
