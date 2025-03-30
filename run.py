@@ -382,7 +382,9 @@ def main():
     output_dir: str = args.output_dir
 
     if args.img_dir:
-        ocr = OCR_Subtitles(args.output_subtitles, output_dir, args.img_dir)
+        if args.output_subtitles is None:
+            subtitle_name = "output_subtitles"
+        ocr = OCR_Subtitles(subtitle_name, output_dir, args.img_dir)
         ocr()
         return
 
