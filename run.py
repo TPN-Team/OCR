@@ -44,7 +44,8 @@ def create_arg_parser() -> argparse.ArgumentParser:
     vpy_param_group = parser.add_argument_group(title="VapourSynth")
     _ = vpy_param_group.add_argument(
         "--output-name",
-        default="output_subtitles",
+        type=str,
+        default=None,
         dest="output_subtitles",
         metavar="<outputname>",
         help="Base name for output subtitle files. In batch mode, episode numbers will be appended.",
@@ -299,17 +300,23 @@ def process_episode_vpy(
     offset_sub: int,
     clean_path: str | None = None,
     sub_path: str | None = None,
-    images_dir_override: str | None = None,
 ) -> None:
         
     from filter import Filter
 
     if not clean_path or not sub_path:
         raise ValueError("clean_path and sub_path arguments are required when do_filter is True.")
+    
+    
+    save_name = Path(sub_path).stem
+    if output_subtitles_name is not None:
+        save_name = output_subtitles_name
+    save_dir = Path(output_directory) / save_name
+    save_img_dir = save_dir / "images"
 
-    engine = OCR_Subtitles(output_subtitles_name=output_subtitles_name, output_directory=output_directory, images_dir_override=images_dir_override)
+    engine = OCR_Subtitles(save_name, save_dir, save_img_dir)
 
-    if engine.images_dir.exists():
+    if engine.images_dir.exists() and any(engine.images_dir.iterdir()):
         print(f"Removing existing images directory: {engine.images_dir}")
         try:
             rmtree(engine.images_dir)
@@ -322,53 +329,50 @@ def process_episode_vpy(
     
     engine()
 
+def batch_process_vpy(output_directory: str, clean_dir: str, sub_dir: str, offset_clean: int, offset_sub: int) -> None:
+    print("Batch mode!")
+    ep_regex = r"(.*?)(\d{2,3}).*"
+    episodes: dict[str, dict[str, str]] = {}
 
+    clean_video_list = Path(clean_dir).glob("*.*")
+    sub_video_list = Path(sub_dir).glob("*.*")
+    
+    for f in clean_video_list:
+        file_name = Path(f).name
+        clean_match = re.search(ep_regex, file_name)
+        if clean_match:
+            episode = int(clean_match.group(2))
+            if episode not in episodes:
+                episodes[episode] = {"clean": f}
+            elif "clean" not in episodes[episode]:
+                episodes[episode]["clean"] = f
 
-def batch_process_vpy(directory: str, hardsub_pattern: str, clean_pattern: str, offset_clean: int, offset_sub: int) -> None:
-    episodes = find_matching_files(directory, hardsub_pattern, clean_pattern)
+    for f in sub_video_list:
+        file_name = Path(f).name
+        sub_match = re.search(ep_regex, file_name)
+        if sub_match:
+            episode = int(sub_match.group(2))
+            if episode not in episodes:
+                episodes[episode] = {"hardsub": f}
+            elif "hardsub" not in episodes[episode]:
+                episodes[episode]["hardsub"] = f
+
+    print(f"Find {len(episodes)} episodes")
 
     for episode, files in sorted(episodes.items()):
         if "clean" in files and "hardsub" in files:
             print(f"Processing episode {episode}")
-            output_subtitles = f"output_subtitles_ep{episode}"
-            images_dir = f"{directory}/images_{episode}"
+            output_subtitles_name = Path(files["hardsub"]).stem
             process_episode_vpy(
-                output_subtitles_base=output_subtitles,
+                output_subtitles_name=output_subtitles_name,
+                output_directory=output_directory,
                 offset_clean=offset_clean,
                 offset_sub=offset_sub,
                 clean_path=files["clean"],
                 sub_path=files["hardsub"],
-                images_dir_override=images_dir,
-                do_filter=True,
             )
         else:
             print(f"Skipping episode {episode} - missing clean or hardsub file")
-
-    
-def find_matching_files(directory: str, hardsub_pattern: str, clean_pattern: str) -> dict[str, dict[str, str]]:
-    all_files = glob.glob(f"{directory}/*")
-
-    episodes: dict[str, dict[str, str]] = {}
-
-    for file in all_files:
-        file_name = Path(file).name
-        hardsub_match = re.search(hardsub_pattern, file_name)
-        if hardsub_match:
-            episode = hardsub_match.group(1)
-            if episode not in episodes:
-                episodes[episode] = {"hardsub": file}
-            elif "hardsub" not in episodes[episode]:
-                episodes[episode]["hardsub"] = file
-
-        clean_match = re.search(clean_pattern, file_name)
-        if clean_match:
-            episode = clean_match.group(1)
-            if episode not in episodes:
-                episodes[episode] = {"clean": file}
-            elif "clean" not in episodes[episode]:
-                episodes[episode]["clean"] = file
-
-    return episodes
 
 def main():
     parser = create_arg_parser()
@@ -404,28 +408,31 @@ def main():
             video_list = [video_path]
         
         process_vsf(video_list, output_dir, vsf)
-        
-        return
-
-
-    if args.batch:
-        if not all([args.directory, args.clean, args.hardsub]):
-            parser.error(
-                "The --directory, clean (pattern), and sub (pattern) arguments are required when using batch mode"
-            )
-        batch_process_vpy(args.directory, args.hardsub, args.clean, args.offset_clean, args.offset_sub)
-    else:
+    
+    elif engine == Engine.VAPOURSYNTH:
+        video_formats = [".mp4", ".avi", ".mov", ".mkv"]
+        clean: str = args.clean
+        sub: str = args.hardsub
         if not args.clean or not args.hardsub:
             parser.error("The 'clean' and 'sub' arguments are required when use VapourSynth engine.")
-        process_episode_vpy(
-            output_subtitles_name=args.output_subtitles,
-            output_directory=output_dir,
-            offset_clean=args.offset_clean,
-            offset_sub=args.offset_sub,
-            sub_path=args.hardsub,
-            clean_path=args.clean,
-            images_dir_override=None,
-        )
+            return
+        if Path(clean).is_dir() and Path(sub).is_dir():
+            batch_process_vpy(
+                output_directory=output_dir,
+                clean_dir=args.clean,
+                sub_dir=args.hardsub,
+                offset_clean=args.offset_clean,
+                offset_sub=args.offset_sub,
+            )
+        else:
+            process_episode_vpy(
+                output_subtitles_name=args.output_subtitles,
+                output_directory=output_dir,
+                offset_clean=args.offset_clean,
+                offset_sub=args.offset_sub,
+                sub_path=args.hardsub,
+                clean_path=args.clean,
+            )
 
     print("Done")
 
