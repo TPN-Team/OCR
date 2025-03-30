@@ -9,7 +9,6 @@
   - [Usage](#usage)
   - [TODO](#todo)
   - [Acknowledgement](#acknowledgement)
-  <!--toc:end-->
 
 # TPN-Team's OCR tool
 
@@ -140,6 +139,7 @@ With this you no need to install vapoursynth.
 
 - Support VideoSubFinder.
 - Better batch support and docs for batch mode.
+- Implement concat OCR (Merge an amount of image into one and OCR then get result base on coordinates. This would have better performance) (Need help) 
 
 ## Acknowledgement
 
