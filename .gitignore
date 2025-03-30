@@ -94,3 +94,6 @@ desktop.ini
 
 # vsjet
 .vsjet/
+
+# Default output dir
+outputs/*
