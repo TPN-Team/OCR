@@ -88,18 +88,22 @@ class VideoSubFinder:
                 "clear_txt_images_by_main_color": clear_txt_images_by_main_color,
                 "video_gamma": video_gamma,
             }
+            start = "-"
+            if platform.system() == "Windows":
+                start = "/"
             for k, v in general_cfg_dict.items():
                 if v is None:
-                    run_list.extend([f"/{k}", ""])
+                    run_list.extend([f"{start}{k}", "none"])
+                    continue
 
                 value = str(int(v)) if isinstance(v, bool) else str(v)
-                run_list.extend([f"/{k}", value])
+                run_list.extend([f"{start}{k}", value])
 
         self.run_list = run_list
 
     def __call__(self, video_path: str | Path, output_dir: str | Path):
         self.run_list.extend(["--input_video", str(video_path), "--output_dir", str(output_dir)])
-
+        
         # print(self.run_list)
         try:
             _ = subprocess.run(
