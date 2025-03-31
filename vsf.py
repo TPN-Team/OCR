@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 from pathlib import Path
 
@@ -29,7 +30,7 @@ class VideoSubFinder:
         use_filter_color: str | None = None,
         moderate_threshold: float = 0.25,
         moderate_threshold_for_scaled_image: float = 0.25,
-        image_scale_for_clear_image: int = 1,
+        image_scale_for_clear_image: int = 4,
         use_ILA_images_before_clear_txt_images_from_borders: bool = False,
         use_ILA_images_for_getting_txt_symbols_areas: bool = False,
         use_ILA_images_for_clear_txt_images: bool = True,

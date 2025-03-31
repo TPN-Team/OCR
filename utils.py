@@ -1,13 +1,12 @@
-from typing import Callable
-
-
 import argparse
+import io
 import os
 import platform
 import re
 import shutil
 import unicodedata
 from pathlib import Path
+from typing import Callable
 
 from PIL import Image, UnidentifiedImageError
 
@@ -81,11 +80,14 @@ def get_image_raw_bytes_and_dims(image_path: str) -> tuple[bytes, int, int] | No
         with Image.open(image_path) as img:
             width = img.width
             height = img.height
-
-        with open(image_path, "rb") as file:
-            raw_bytes = file.read()
-
-        return (raw_bytes, width, height)
+            limit_width = 1100
+            if width > limit_width:
+                width = limit_width
+                height: int = int(height * (limit_width / img.width))
+                img = img.resize((width, height), Image.Resampling.LANCZOS)
+            image_bytes = io.BytesIO()
+            img.save(image_bytes, format="PNG", compress_level=3)
+            return (image_bytes.getvalue(), width, height)
 
     except FileNotFoundError:
         print(f"Error: Image file not found at '{image_path}'")

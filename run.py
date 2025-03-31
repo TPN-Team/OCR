@@ -219,8 +219,8 @@ def create_arg_parser() -> argparse.ArgumentParser:
     _ = vsf_param_group.add_argument(
         "--image_scale_for_clear_image",
         type=int,
-        default=1,
-        help="Define image scale for clear image. Default: 1.",
+        default=4,
+        help="Define image scale for clear image. Default: 2.",
     )
     _ = vsf_param_group.add_argument(
         "--use_ILA_images_for_getting_txt_symbols_areas",
