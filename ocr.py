@@ -12,7 +12,7 @@ from gglens import GoogleLens
 
 class OCRSpeedColumn(ProgressColumn):
     """Progress rendering."""
-    
+
     @override
     def render(self, task: Task) -> Text:
         """Render bar."""
@@ -21,7 +21,7 @@ class OCRSpeedColumn(ProgressColumn):
 
 
 class AssSubtitle:
-    def __init__(self, start_time: str, end_time: str, text_content: str, is_top: bool=False):
+    def __init__(self, start_time: str, end_time: str, text_content: str, is_top: bool = False):
         self.start_time: str = start_time
         self.end_time: str = end_time
         self.text_content: str = text_content
@@ -36,18 +36,24 @@ class AssSubtitle:
     @override
     def __str__(self):
         return f"Dialogue: 0,{self.convert_timestamp(self.start_time)},{self.convert_timestamp(self.end_time)},{self.style_name},,0,0,0,,{self.text_content}\n"
-        
+
 
 class OCR_Subtitles:
     THREADS: int = 16
-    IMAGE_EXTENSIONS: tuple[Literal['*.jpeg'], Literal['*.jpg'], Literal['*.png'], Literal['*.bmp'], Literal['*.gif']] = ("*.jpeg", "*.jpg", "*.png", "*.bmp", "*.gif")
+    IMAGE_EXTENSIONS: tuple[
+        Literal["*.jpeg"], Literal["*.jpg"], Literal["*.png"], Literal["*.bmp"], Literal["*.gif"]
+    ] = ("*.jpeg", "*.jpg", "*.png", "*.bmp", "*.gif")
 
-    def __init__(self, output_subtitles_name: str, output_directory: str, images_dir_override: str) -> None:
+    def __init__(
+        self, output_subtitles_name: str | Path, output_directory: str | Path, images_dir_override: str | Path
+    ) -> None:
         self.images: list[str] = []
         self.ass_dict: dict[int, AssSubtitle] = {}
         self.scan_lock: Lock = Lock()
         self.lens: GoogleLens = GoogleLens()
-        self.images_dir, self.output_file_path = self._process_file(output_subtitles_name, output_directory, images_dir_override)
+        self.images_dir, self.output_file_path = self._process_file(
+            output_subtitles_name, output_directory, images_dir_override
+        )
         self.completed_scans: int = 0
 
     def __call__(self):
@@ -89,9 +95,9 @@ class OCR_Subtitles:
 
     def _process_file(
         self,
-        output_subtitles_name: str,
-        output_directory: str,
-        images_dir_override: str | None = None, 
+        output_subtitles_name: str | Path,
+        output_directory: str | Path,
+        images_dir_override: str | Path | None = None,
     ) -> tuple[Path, Path]:
         try:
             output_path = Path(output_directory).resolve()
@@ -114,7 +120,6 @@ class OCR_Subtitles:
             print(f"Error type: {type(e).__name__}")
             print(f"Error details: {e}")
             raise
-        
 
     def _process_image(self, image: Path, line: int):
         img_filename = str(image.absolute())
@@ -215,7 +220,7 @@ Style: Top,Arial,60,&H00FFFFFF,&H00000000,&H4D000000,&H81000000,-1,0,0,0,100,100
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
         try:
-            
+
             with self.output_file_path.open("w", encoding="utf-8") as ass_file:
                 _ = ass_file.write(ass_header)
                 for subtitle in cleaned_ass_bot + cleaned_ass_top:

@@ -6,6 +6,7 @@ from utils import get_in_path
 
 cur_dir = Path(__file__).resolve().parent
 
+
 class VideoSubFinder:
     def __init__(
         self,
@@ -44,7 +45,7 @@ class VideoSubFinder:
 
         if self.exe_path is None or not os.access(self.exe_path, os.X_OK):
             raise ValueError("VSF Exe path must not be None.")
-        
+
         self.txtimage = create_cleared_text_images
 
         param_dict = {
@@ -74,7 +75,7 @@ class VideoSubFinder:
                 run_list.append(f"--{str(k)}")
             else:
                 run_list.extend([f"--{k}", str(v)])
-        
+
         if general_settings is None:
             general_cfg_dict = {
                 "use_filter_color": use_filter_color,
@@ -91,21 +92,20 @@ class VideoSubFinder:
                 if v is None:
                     run_list.extend([f"/{k}", ""])
 
-                value = str(int(v)) if isinstance(v, bool) else str(v) 
+                value = str(int(v)) if isinstance(v, bool) else str(v)
                 run_list.extend([f"/{k}", value])
 
         self.run_list = run_list
 
-    def __call__(self, video_path: str, output_dir: str) -> str:
-        self.run_list.extend(["--input_video", video_path, "--output_dir", output_dir])
+    def __call__(self, video_path: str | Path, output_dir: str | Path):
+        self.run_list.extend(["--input_video", str(video_path), "--output_dir", str(output_dir)])
 
         # print(self.run_list)
         try:
-            subprocess.run(
+            _ = subprocess.run(
                 self.run_list,
                 check=False,
             )
-            return output_dir
         except Exception as e:
             raise e
 

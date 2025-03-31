@@ -1,5 +1,6 @@
 import enum
 
+
 class Engine(enum.Enum):
     VAPOURSYNTH = "vapoursynth"
     VIDEOSUBFINDER = "videosubfinder"

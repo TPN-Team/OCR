@@ -12,10 +12,12 @@ core = vs.core
 
 
 class Filter:
-    def __init__(self, clean_path: str, clean_offset: int, hardsub_path: str, sub_offset: int, images_dir: Path):
-        self.clean_path: str = clean_path
+    def __init__(
+        self, clean_path: str | Path, clean_offset: int, hardsub_path: str | Path, sub_offset: int, images_dir: Path
+    ):
+        self.clean_path: str | Path = clean_path
         self.clean_offset: int = clean_offset
-        self.hardsub_path: str = hardsub_path
+        self.hardsub_path: str | Path = hardsub_path
         self.sub_offset: int = sub_offset
         self.images_dir: Path = images_dir
 
@@ -149,4 +151,3 @@ class Filter:
 if is_preview():
     filter = Filter(r"clean.mkv", 0, r"sub.mkv", 0, images_dir=Path("images"))
     filter.filter_videos()
-

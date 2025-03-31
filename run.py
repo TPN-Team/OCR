@@ -1,5 +1,4 @@
 import argparse
-import glob
 import re
 from argparse import BooleanOptionalAction
 from pathlib import Path
@@ -35,10 +34,7 @@ def create_arg_parser() -> argparse.ArgumentParser:
         "--engine",
         type=engine_type,
         default="vapoursynth",
-        help=(
-            "Select the processing engine. "
-            f"Choices (case-insensitive): {', '.join([e.value for e in Engine])}"
-        )
+        help=("Select the processing engine. " f"Choices (case-insensitive): {', '.join([e.value for e in Engine])}"),
     )
 
     vpy_param_group = parser.add_argument_group(title="VapourSynth")
@@ -54,22 +50,20 @@ def create_arg_parser() -> argparse.ArgumentParser:
         "clean",
         nargs="?",
         metavar="<clean>",
-        help="In single-file mode: path to the clean source video. " +
-        "In batch mode: regex pattern for matching clean files, with episode number as group 1.",
+        help="In single-file mode: path to the clean source video. "
+        + "In batch mode: regex pattern for matching clean files, with episode number as group 1.",
     )
 
     _ = vpy_param_group.add_argument(
         "hardsub",
         nargs="?",
         metavar="<hardsub>",
-        help="In single-file mode: path to the hardsub source video. " +
-        "In batch mode: regex pattern for matching hardsub files, with episode number as group 1.",
+        help="In single-file mode: path to the hardsub source video. "
+        + "In batch mode: regex pattern for matching hardsub files, with episode number as group 1.",
     )
 
     _ = vpy_param_group.add_argument(
-        "--batch", 
-        action="store_true", 
-        help="Enable batch processing mode to handle multiple episodes"
+        "--batch", action="store_true", help="Enable batch processing mode to handle multiple episodes"
     )
 
     _ = vpy_param_group.add_argument(
@@ -106,7 +100,7 @@ def create_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="The full path of VideoSubFinderWXW. Default: from PATH (Much have .exe suffix in Windows).",
     )
-    vsf_param_group.add_argument(
+    _ = vsf_param_group.add_argument(
         "-i",
         "--video_dir",
         type=str,
@@ -143,12 +137,7 @@ def create_arg_parser() -> argparse.ArgumentParser:
         default=False,
         help="Enable or disable open video by FFMPEG.",
     )
-    _ = vsf_param_group.add_argument(
-        "--use_cuda", 
-        action=BooleanOptionalAction, 
-        default=False, 
-        help="use cuda"
-    )
+    _ = vsf_param_group.add_argument("--use_cuda", action=BooleanOptionalAction, default=False, help="use cuda")
     _ = vsf_param_group.add_argument(
         "--start_time",
         type=str,
@@ -235,25 +224,25 @@ def create_arg_parser() -> argparse.ArgumentParser:
     )
     _ = vsf_param_group.add_argument(
         "--use_ILA_images_for_getting_txt_symbols_areas",
-        action=BooleanOptionalAction, 
+        action=BooleanOptionalAction,
         default=False,
         help="Enable or disable use ILA images for getting txt symbols areas. Default: False.",
     )
     _ = vsf_param_group.add_argument(
         "--use_ILA_images_before_clear_txt_images_from_borders",
-        action=BooleanOptionalAction, 
+        action=BooleanOptionalAction,
         default=False,
         help="Enable or disable use ILA images before clear txt images from borders. Default: False.",
     )
     _ = vsf_param_group.add_argument(
         "--use_ILA_images_for_clear_txt_images",
-        action=BooleanOptionalAction, 
+        action=BooleanOptionalAction,
         default=True,
         help="Enable or disable use ILA images for clear txt images. Default: True.",
     )
     _ = vsf_param_group.add_argument(
         "--clear_txt_images_by_main_color",
-        action=BooleanOptionalAction, 
+        action=BooleanOptionalAction,
         default=True,
         help="Enable or disable clear txt images by main color. Default: True.",
     )
@@ -265,7 +254,8 @@ def create_arg_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-def process_vsf(video_list: list[str], output_dir: str, vsf: VideoSubFinder):
+
+def process_vsf(video_list: list[Path], output_dir: str, vsf: VideoSubFinder):
 
     print("Extracting subtitle images with VideoSubFinder (takes quite a long time) ...")
     video_num = len(video_list)
@@ -287,27 +277,27 @@ def process_vsf(video_list: list[str], output_dir: str, vsf: VideoSubFinder):
         images_dir = Path(save_vsf_dir) / "RGBImages"
         if vsf.txtimage:
             images_dir = Path(save_vsf_dir) / "TXTImages"
-        
+
         ocr = OCR_Subtitles(output_subtitles_name=save_name, output_directory=save_dir, images_dir_override=images_dir)
         ocr()
-        
+
     return
+
 
 def process_episode_vpy(
     output_subtitles_name: str,
     output_directory: str,
     offset_clean: int,
     offset_sub: int,
-    clean_path: str | None = None,
-    sub_path: str | None = None,
+    clean_path: str | Path | None = None,
+    sub_path: str | Path | None = None,
 ) -> None:
-        
+
     from filter import Filter
 
     if not clean_path or not sub_path:
         raise ValueError("clean_path and sub_path arguments are required when do_filter is True.")
-    
-    
+
     save_name = Path(sub_path).stem
     if output_subtitles_name is not None:
         save_name = output_subtitles_name
@@ -326,22 +316,23 @@ def process_episode_vpy(
 
     filter = Filter(clean_path, offset_clean, sub_path, offset_sub, engine.images_dir)
     filter.filter_videos()
-    
+
     engine()
+
 
 def batch_process_vpy(output_directory: str, clean_dir: str, sub_dir: str, offset_clean: int, offset_sub: int) -> None:
     print("Batch mode!")
     ep_regex = r"(.*?)(\d{2,3}).*"
-    episodes: dict[str, dict[str, str]] = {}
+    episodes: dict[str, dict[str, Path]] = {}
 
     clean_video_list = Path(clean_dir).glob("*.*")
     sub_video_list = Path(sub_dir).glob("*.*")
-    
+
     for f in clean_video_list:
         file_name = Path(f).name
         clean_match = re.search(ep_regex, file_name)
         if clean_match:
-            episode = int(clean_match.group(2))
+            episode = clean_match.group(2)
             if episode not in episodes:
                 episodes[episode] = {"clean": f}
             elif "clean" not in episodes[episode]:
@@ -351,7 +342,7 @@ def batch_process_vpy(output_directory: str, clean_dir: str, sub_dir: str, offse
         file_name = Path(f).name
         sub_match = re.search(ep_regex, file_name)
         if sub_match:
-            episode = int(sub_match.group(2))
+            episode = sub_match.group(2)
             if episode not in episodes:
                 episodes[episode] = {"hardsub": f}
             elif "hardsub" not in episodes[episode]:
@@ -374,6 +365,7 @@ def batch_process_vpy(output_directory: str, clean_dir: str, sub_dir: str, offse
         else:
             print(f"Skipping episode {episode} - missing clean or hardsub file")
 
+
 def main():
     parser = create_arg_parser()
     args = parser.parse_args()
@@ -382,6 +374,7 @@ def main():
     output_dir: str = args.output_dir
 
     if args.img_dir:
+        subtitle_name = args.output_subtitles
         if args.output_subtitles is None:
             subtitle_name = "output_subtitles"
         ocr = OCR_Subtitles(subtitle_name, output_dir, args.img_dir)
@@ -389,28 +382,23 @@ def main():
         return
 
     if engine == Engine.VIDEOSUBFINDER:
-        
+
         video_formats = [".mp4", ".avi", ".mov", ".mkv"]
 
         vsf = VideoSubFinder(**vars(args))
-        
-        video_path: str = args.video_dir
+
+        video_path = args.video_dir
         if video_path is None:
-            parser.error(
-                "--video-dir is required when using VideoSubFinnder engine"
-            )
-            return
-        
+            parser.error("--video-dir is required when using VideoSubFinnder engine")
+
         if Path(video_path).is_dir():
             video_list = Path(video_path).rglob("*.*")
-            video_list = [
-                v.absolute() for v in video_list if v.suffix.lower() in video_formats
-            ]
+            video_list = [v.absolute() for v in video_list if v.suffix.lower() in video_formats]
         else:
-            video_list = [video_path]
-        
+            video_list = [Path(video_path)]
+
         process_vsf(video_list, output_dir, vsf)
-    
+
     elif engine == Engine.VAPOURSYNTH:
         video_formats = [".mp4", ".avi", ".mov", ".mkv"]
         clean: str = args.clean
@@ -437,6 +425,7 @@ def main():
             )
 
     print("Done")
+
 
 if __name__ == "__main__":
     main()

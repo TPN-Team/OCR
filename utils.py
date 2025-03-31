@@ -1,3 +1,5 @@
+from typing import Callable
+
 
 import argparse
 import os
@@ -16,6 +18,7 @@ DOUBLE_QUOTE_REGEX = re.compile(
 )
 
 SINGLE_QUOTE_REGEX = re.compile("|".join(["‘", "‛", "’", "❛", "❜", "`", "´", "‘", "’"]))
+
 
 def remove_hieroglyphs_unicode(text: str) -> str:
     allowed_categories = {
@@ -52,22 +55,25 @@ def remove_hieroglyphs_unicode(text: str) -> str:
 
     return cleaned_text
 
+
 def apply_punctuation_and_spacing(text: str) -> str:
-        # Remove extra spaces before punctuation
-        text = re.sub(r"\s+([,.!?…])", r"\1", text)
+    # Remove extra spaces before punctuation
+    text = re.sub(r"\s+([,.!?…])", r"\1", text)
 
-        # Ensure single space after punctuation, except for multiple punctuation marks
-        text = re.sub(r"([,.!?…])(?!\s)(?![,.!?…])", r"\1 ", text)
+    # Ensure single space after punctuation, except for multiple punctuation marks
+    text = re.sub(r"([,.!?…])(?!\s)(?![,.!?…])", r"\1 ", text)
 
-        # Remove space between multiple punctuation marks
-        text = re.sub(r"([,.!?…])\s+([,.!?…])", r"\1\2", text)
+    # Remove space between multiple punctuation marks
+    text = re.sub(r"([,.!?…])\s+([,.!?…])", r"\1\2", text)
 
-        return text.strip()
+    return text.strip()
+
 
 def fix_quotes(text: str) -> str:
     text = SINGLE_QUOTE_REGEX.sub("'", text)
     text = DOUBLE_QUOTE_REGEX.sub('"', text)
     return text
+
 
 def get_image_raw_bytes_and_dims(image_path: str) -> tuple[bytes, int, int] | None:
 
@@ -76,7 +82,7 @@ def get_image_raw_bytes_and_dims(image_path: str) -> tuple[bytes, int, int] | No
             width = img.width
             height = img.height
 
-        with open(image_path, 'rb') as file:
+        with open(image_path, "rb") as file:
             raw_bytes = file.read()
 
         return (raw_bytes, width, height)
@@ -94,8 +100,9 @@ def get_image_raw_bytes_and_dims(image_path: str) -> tuple[bytes, int, int] | No
         # Add type hints to help static analysis if possible, but Exception is broad
         print(f"An unexpected error occurred processing '{image_path}': {e}")
         return None
-            
-def float_range(mini, maxi):
+
+
+def float_range(mini: float, maxi: float) -> Callable[..., float]:
     """Return function handle of an argument type function for
     ArgumentParser checking a float range: mini <= arg <= maxi
       mini - minimum acceptable argument
@@ -111,15 +118,14 @@ def float_range(mini, maxi):
             raise argparse.ArgumentTypeError("must be a floating point number") from exc
 
         if f < mini or f > maxi:
-            raise argparse.ArgumentTypeError(
-                "must be in range [" + str(mini) + " .. " + str(maxi) + "]"
-            )
+            raise argparse.ArgumentTypeError("must be in range [" + str(mini) + " .. " + str(maxi) + "]")
         return f
 
     # Return function handle to checking function
     return float_range_checker
 
-def engine_type(value_str):
+
+def engine_type(value_str: str) -> Engine:
     """
     Argparse type function for Engine enum.
     Performs case-insensitive matching.
@@ -127,11 +133,12 @@ def engine_type(value_str):
     try:
         return Engine(value_str.lower())
     except ValueError:
-        valid_choices = ', '.join([e.value for e in Engine])
-        raise argparse.ArgumentTypeError(
-            f"invalid choice: '{value_str}' (choose from {valid_choices})")
+        valid_choices = ", ".join([e.value for e in Engine])
+        raise argparse.ArgumentTypeError(f"invalid choice: '{value_str}' (choose from {valid_choices})")
 
-def get_in_path(name: str) -> str:
+
+def get_in_path(name: str) -> str | None:
+    search_name = name
     if platform.system() == "Windows":
         search_name = name + ".exe"
 

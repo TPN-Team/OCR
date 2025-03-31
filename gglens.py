@@ -4,24 +4,31 @@ from typing import Any
 
 from httpx import Client
 
-from lens import (AppliedFilter, LensOverlayFilterType, LensOverlayRoutingInfo, LensOverlayServerRequest,
-                  LensOverlayServerResponse, Platform, Surface,)
+from lens import (
+    AppliedFilter,
+    LensOverlayFilterType,
+    LensOverlayRoutingInfo,
+    LensOverlayServerRequest,
+    LensOverlayServerResponse,
+    Platform,
+    Surface,
+)
 from utils import get_image_raw_bytes_and_dims
 
 
 class GoogleLens:
     LENS_ENDPOINT: str = "https://lensfrontend-pa.googleapis.com/v1/crupload"
 
-    HEADERS: dict[str, str]  = {
-        'Host': 'lensfrontend-pa.googleapis.com',
-        'Connection': 'keep-alive',
-        'Content-Type': 'application/x-protobuf',
-        'X-Goog-Api-Key': 'AIzaSyDr2UxVnv_U85AbhhY8XSHSIavUW0DC-sY',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-Mode': 'no-cors',
-        'Sec-Fetch-Dest': 'empty',
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
+    HEADERS: dict[str, str] = {
+        "Host": "lensfrontend-pa.googleapis.com",
+        "Connection": "keep-alive",
+        "Content-Type": "application/x-protobuf",
+        "X-Goog-Api-Key": "AIzaSyDr2UxVnv_U85AbhhY8XSHSIavUW0DC-sY",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Dest": "empty",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
     }
 
     def __init__(self):
@@ -29,9 +36,9 @@ class GoogleLens:
 
     def __del__(self):
         self.client.close()
-    
+
     def __call__(self, img_path: str):
-        
+
         request = LensOverlayServerRequest()
 
         request.objects_request.request_context.request_id.uuid = random.randint(0, 2**64 - 1)
@@ -45,9 +52,9 @@ class GoogleLens:
 
         # request.objects_request.request_context.client_context.locale_context.language = 'vi'
         # request.objects_request.request_context.client_context.locale_context.region = 'Asia/Ho_Chi_Minh'
-        request.objects_request.request_context.client_context.locale_context.time_zone = '' # not set by chromium
+        request.objects_request.request_context.client_context.locale_context.time_zone = ""  # not set by chromium
 
-        request.objects_request.request_context.client_context.app_id = '' # not set by chromium
+        request.objects_request.request_context.client_context.app_id = ""  # not set by chromium
 
         filter = AppliedFilter()
         filter.filter_type = LensOverlayFilterType.AUTO_FILTER
@@ -79,7 +86,7 @@ class GoogleLens:
 
                 if res.status_code == 200:
                     break
-                
+
                 raise Exception(f"Request failed with status code: {res.status_code}")
 
             except Exception as e:
@@ -95,18 +102,20 @@ class GoogleLens:
             response_proto = LensOverlayServerResponse().FromString(res.content)
             response_dict: dict[str, Any] = response_proto.to_dict()
 
-            result: str = ''
-            paragraphs = response_dict.get('objectsResponse', {}).get('text', {}).get('textLayout', {}).get('paragraphs', []) 
+            result: str = ""
+            paragraphs = (
+                response_dict.get("objectsResponse", {}).get("text", {}).get("textLayout", {}).get("paragraphs", [])
+            )
             if not paragraphs:
                 print(f"Empty OCR please check subtitle {img_path}")
-            separator = '\\n '
+            separator = "\\n "
             for index, paragraph in enumerate(paragraphs):
                 if index > 0:
                     result += separator
-                for line in paragraph.get('lines', []):
-                    for word in line.get('words', []):
-                        plain_text = word.get('plainText', '')
-                        separator_text = word.get('textSeparator', '')
-                        result += plain_text + separator_text        
-            
+                for line in paragraph.get("lines", []):
+                    for word in line.get("words", []):
+                        plain_text = word.get("plainText", "")
+                        separator_text = word.get("textSeparator", "")
+                        result += plain_text + separator_text
+
             return result
