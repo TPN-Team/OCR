@@ -59,7 +59,7 @@ class OCR_Subtitles:
     def __call__(self):
         self.completed_scans = 0
         for extension in self.IMAGE_EXTENSIONS:
-            paths = self.images_dir.rglob(extension)
+            paths = sorted(self.images_dir.rglob(extension))
             string_paths = [str(p) for p in paths]
             self.images.extend(string_paths)
 
