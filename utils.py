@@ -19,6 +19,38 @@ DOUBLE_QUOTE_REGEX = re.compile(
 SINGLE_QUOTE_REGEX = re.compile("|".join(["‘", "‛", "’", "❛", "❜", "`", "´", "‘", "’"]))
 
 
+def text_cleanup(text: str) -> str:
+    # Replace literal \n with \N
+    text = re.sub(r"\\n", r"\\N", text.strip())
+
+    # Các ký tự đặc biệt bạn muốn GIỮ LẠI
+    # Lưu ý: ký tự \ phải được viết là \\ trong chuỗi Python
+    allowed_special_chars = r' ![]_$ /\\:" ,.?-+=()*%@~'
+
+    # Tạo mẫu regex
+    # Mẫu này sẽ tìm tất cả các ký tự KHÔNG PHẢI là:
+    # - Khoảng trắng (\s)
+    # - Ký tự tiếng Việt (a-zA-Z và các dải Unicode cho ký tự có dấu)
+    # - Chữ số (0-9)
+    # - Các ký tự đặc biệt đã cho phép
+    pattern = re.compile(
+        rf"[^\sa-zA-Z"
+        r"\u00C0-\u017F"  # Latin Extended-A
+        r"\u0180-\u024F"  # Latin Extended-B (This is the FIX for ư, ơ)
+        r"\u1E00-\u1EFF"  # Latin Extended Additional (covers most accented letters)
+        r"0-9"
+        rf"{re.escape(allowed_special_chars)}]"
+    )
+
+    # Thực hiện thay thế
+    text = re.sub(pattern, "", text)
+
+    # Collapse multiple \N and trim at ends
+    text = re.sub(r"(?:\s*\\N\s*){2,}", r"\\N", text)
+    text = re.sub(r"^\\N\s*|\s*\\N$", "", text)
+
+    return text
+
 def remove_hieroglyphs_unicode(text: str) -> str:
     allowed_categories = {
         "Lu",  # Uppercase letter
