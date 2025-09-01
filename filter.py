@@ -95,7 +95,7 @@ class Filter:
         hardsub_y = get_y(hardsub)
 
         mask = HardsubLine().get_mask(box_blur(hardsub_y), box_blur(clean_y))
-        mask = iterate(mask, core.std.Maximum, 10).misc.SCDetect(0.02).vszip.PlaneAverage([0])
+        mask = iterate(mask, core.std.Maximum, 10).misc.SCDetect(0.012).vszip.PlaneAverage([0])
 
         blank = hardsub.std.BlankClip(format=hardsub.format.id, keep=True)
         merge = blank.std.MaskedMerge(hardsub.std.MakeDiff(clean), mask)
@@ -187,20 +187,26 @@ class Filter:
                 print(f"Image {loc}_{frame_start}.jpg not found")
 
     def _format_frame_time(self, start_frame: int, end_frame: int, fpsnum: int, fpsden: int) -> str:
-        start_time = self._to_timestamp(start_frame * fpsden / fpsnum)
-        end_time = self._to_timestamp((end_frame + 1) * fpsden / fpsnum)
+        def frame_to_time_ms(frame: int) -> int:
+            raw_ms = frame * fpsden * 1000 // fpsnum
+            return (raw_ms + 5) - (raw_ms + 5) % 10
+        
+        start_time = self._ms_to_timecode(frame_to_time_ms(start_frame))
+        end_time = self._ms_to_timecode(frame_to_time_ms(end_frame))
 
         start_formatted = f"{start_time[0]}_{start_time[1]}_{start_time[2]}_{start_time[3]}"
         end_formatted = f"{end_time[0]}_{end_time[1]}_{end_time[2]}_{end_time[3]}"
         return f"{start_formatted}__{end_formatted}"
 
-    def _to_timestamp(self, total_seconds) -> Tuple[str, str, str, str]:
-        hours = int(total_seconds // 3600)
-        minutes = int((total_seconds % 3600) // 60)
-        seconds = int(total_seconds % 60)
-        milliseconds = int((total_seconds - int(total_seconds)) * 1000)
-
-        return (f"{hours:02d}", f"{minutes:02d}", f"{seconds:02d}", f"{milliseconds:03d}")
+    def _ms_to_timecode(self, ms: int) -> Tuple[str, str, str, str]:
+        hours = ms // (1000 * 60 * 60)
+        ms %= (1000 * 60 * 60)
+        minutes = ms // (1000 * 60)
+        ms %= (1000 * 60)
+        seconds = ms // 1000
+        centiseconds = (ms % 1000) // 10
+        
+        return (f"{hours}", f"{minutes:02d}", f"{seconds:02d}", f"{centiseconds:02d}")
 
 
 if is_preview():
