@@ -1,19 +1,17 @@
+import concurrent.futures
 import random
-
-from typing import Any
+from pathlib import Path
+from threading import Lock
+from typing import Any, Dict
 
 from httpx import Client
+from rich.console import Console
+from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
-from lens import (
-    AppliedFilter,
-    LensOverlayFilterType,
-    LensOverlayRoutingInfo,
-    LensOverlayServerRequest,
-    LensOverlayServerResponse,
-    Platform,
-    Surface,
-)
-from utils import get_image_raw_bytes_and_dims
+from lens import (AppliedFilter, LensOverlayFilterType, LensOverlayRoutingInfo, LensOverlayServerRequest,
+                  LensOverlayServerResponse, Platform, Surface,)
+from progress import ImageSecondSpeedColumn
+from utils import collect_images, get_image_raw_bytes_and_dims, timecode_key
 
 
 class GoogleLens:
@@ -31,13 +29,62 @@ class GoogleLens:
         "Accept-Encoding": "gzip, deflate, br, zstd",
     }
 
-    def __init__(self):
+    def __init__(self, threads: int = 16):
         self.client: Client = Client()
+        self.threads = threads
+        self.scan_lock = Lock()
+        self.console = Console()
 
     def __del__(self):
         self.client.close()
+    
+    @property
+    def engine_name(self) -> str:
+        return "Google Lens"
 
-    def __call__(self, img_path: str):
+    def __call__(self, images_dir: Path) -> Dict[str, str]:
+        """Process all images in a directory with threading - batch functionality."""
+        images = collect_images(images_dir)
+        
+        if not images:
+            self.console.print(f"[yellow]No images found in {images_dir}[/yellow]")
+            return {}
+        
+        results: Dict[str, str] = {}
+        
+        with Progress(
+            TextColumn(f"[progress.description]{{task.description}} ({self.engine_name})"),
+            BarColumn(),
+            TextColumn("{task.completed}/{task.total}"),
+            TextColumn("{task.percentage:>3.0f}%"),
+            ImageSecondSpeedColumn(),
+            TimeRemainingColumn(),
+            console=self.console,
+        ) as progress:
+            task = progress.add_task("Processing images", total=len(images))
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.threads) as executor:
+                future_to_image = {
+                    executor.submit(self.process_image, str(img_path)): img_path.name
+                    for img_path in images
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_image):
+                    img_name = future_to_image[future]
+                    try:
+                        text = future.result()
+                        with self.scan_lock:
+                            results[img_name] = text if text is not None else ""
+                    except Exception as exc:
+                        self.console.print(f"[red]{img_name} generated an exception: {exc}[/red]")
+                        with self.scan_lock:
+                            results[img_name] = ""
+                    
+                    progress.update(task, advance=1)
+        
+        return dict(sorted(results.items(), key=timecode_key))
+
+    def process_image(self, img_path: str) -> str:
 
         request = LensOverlayServerRequest()
 
@@ -119,3 +166,4 @@ class GoogleLens:
                         result += plain_text + separator_text
 
             return result
+        return ""

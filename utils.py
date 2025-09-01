@@ -6,7 +6,7 @@ import re
 import shutil
 import unicodedata
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List, Literal
 
 from PIL import Image, UnidentifiedImageError
 
@@ -158,3 +158,38 @@ def get_in_path(name: str) -> str | None:
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
+
+def collect_images(images_dir: Path) -> List[Path]:
+    """Collect all image files from directory."""
+    images = []
+    images_extensions: tuple[
+        Literal["*.jpeg"], Literal["*.jpg"], Literal["*.png"], Literal["*.bmp"], Literal["*.gif"]
+    ] = ("*.jpeg", "*.jpg", "*.png", "*.bmp", "*.gif")
+    
+    for extension in images_extensions:
+        paths = sorted(images_dir.rglob(extension))
+        images.extend(paths)
+    
+    return sorted(images)
+    
+def timecode_key(item):
+    filename: str = item[0]
+    try:
+        name_without_ext = filename.rsplit('.', 1)[0]
+        
+        if name_without_ext.startswith(('bot_', 'top_')):
+            timecode_part = '_'.join(name_without_ext.split('_')[1:])
+        else:
+            timecode_part = name_without_ext
+        
+        start_timecode = timecode_part.split('__')[0]
+        parts = start_timecode.split('_')
+        
+        hour = int(parts[0])
+        minute = int(parts[1])
+        second = int(parts[2])
+        microsec = int(parts[3])
+        
+        return (hour, minute, second, microsec)
+    except (IndexError, ValueError):
+        return (99, 99, 99, 999)

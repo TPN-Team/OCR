@@ -56,7 +56,7 @@ Step 6: Install vsrepo
 `git clone https://github.com/vapoursynth/vsrepo`
 
 Step 7: Install vapoursynth plugins:
-`python ./vsrepo/vsrepo.py install acrop hysteresis lsmas misc tcanny tedgemask resize2 imwri`
+`python ./vsrepo/vsrepo.py install acrop hysteresis lsmas misc tcanny tedgemask resize2 imwri akarin vszip`
 
 Step 8: Install vsjetpack
 `pip install vsjetpack vspreview`
