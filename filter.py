@@ -119,7 +119,7 @@ class Filter:
         scene_changes: List[Tuple[int, int, Location]] = []
         current_start = {Location.TOP: None, Location.BOT: None}
         
-        with ThreadPoolExecutor(max_workers=16, thread_name_prefix="image_writer") as executor:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="image_writer") as executor:
             futures = []
             
             for n, props in enumerate(rendered_props):
