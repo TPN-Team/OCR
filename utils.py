@@ -10,7 +10,7 @@ from typing import Callable, List, Literal
 
 from PIL import Image, UnidentifiedImageError
 
-from engine import Engine
+from engine import Engine, OCREngine, OCREngineType
 
 DOUBLE_QUOTE_REGEX = re.compile(
     "|".join(["«", "‹", "»", "›", "„", "“", "‟", "”", "❝", "❞", "❮", "❯", "〝", "〞", "〟", "＂", "＂"])
@@ -160,16 +160,16 @@ def float_range(mini: float, maxi: float) -> Callable[..., float]:
 
 
 def engine_type(value_str: str) -> Engine:
-    """
-    Argparse type function for Engine enum.
-    Performs case-insensitive matching.
-    """
     try:
-        return Engine(value_str.lower())
-    except ValueError:
-        valid_choices = ", ".join([e.value for e in Engine])
-        raise argparse.ArgumentTypeError(f"invalid choice: '{value_str}' (choose from {valid_choices})")
-
+        return Engine.from_string(value_str)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+    
+def ocr_engine_type(value: str) -> OCREngineType:
+    try:
+        return OCREngineType.from_string(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
 
 def get_in_path(name: str) -> str | None:
     search_name = name
@@ -225,3 +225,28 @@ def timecode_key(item):
         return (hour, minute, second, microsec)
     except (IndexError, ValueError):
         return (99, 99, 99, 999)
+
+def create_ocr_engine(ocr_engine_type: OCREngineType, args) -> OCREngine:
+    if ocr_engine_type == OCREngineType.GGLENS:
+        from gglens import GoogleLens
+        
+        return GoogleLens(threads=args.gglens_thread)
+    
+    elif ocr_engine_type == OCREngineType.GEMINI:
+        from gemini import Gemini
+        
+        gemini_kwargs = {
+            "model_name": args.gemini_model,
+            "batch_size": args.gemini_batch_size,
+            "max_retries": args.gemini_max_retries,
+            "retry_delay": args.gemini_retry_delay,
+            "max_workers": args.gemini_max_workers,
+        }
+        
+        if args.gemini_prompt:
+            gemini_kwargs["promt"] = args.gemini_prompt
+        
+        return Gemini(**gemini_kwargs)
+    
+    else:
+        raise ValueError(f"Unknown OCR engine: {ocr_engine_type}")

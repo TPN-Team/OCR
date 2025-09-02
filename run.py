@@ -6,7 +6,7 @@ from shutil import rmtree
 
 from engine import Engine
 from ocr import OCR_Subtitles
-from utils import engine_type, float_range
+from utils import OCREngine, OCREngineType, create_ocr_engine, engine_type, float_range, ocr_engine_type
 from vsf import VideoSubFinder
 
 
@@ -33,8 +33,62 @@ def create_arg_parser() -> argparse.ArgumentParser:
         "-e",
         "--engine",
         type=engine_type,
-        default="vapoursynth",
-        help=("Select the processing engine. " f"Choices (case-insensitive): {', '.join([e.value for e in Engine])}"),
+        default=Engine.VAPOURSYNTH,
+        help=f"Select the processing engine. Choices: {[e.value for e in Engine]}. Default: {Engine.VAPOURSYNTH.value}"
+    )
+
+    ocr_group = parser.add_argument_group(title="OCR Engine Settings")
+    _ = ocr_group.add_argument(
+        "--ocr_engine",
+        type=ocr_engine_type,
+        default=OCREngineType.GGLENS,
+        help=f"Select OCR engine. Choices: {[e.value for e in OCREngineType]}. Default: {OCREngineType.GGLENS.value}"
+    )
+    
+    # Google Lens settings
+    _ = ocr_group.add_argument(
+        "--gglens_thread",
+        type=int,
+        default=16,
+        help="Google Lens OCR threads."
+    )
+    
+    # Gemini settings
+    _ = ocr_group.add_argument(
+        "--gemini_model",
+        type=str,
+        default="gemini-2.5-flash",
+        help="Gemini model name. Default: gemini-2.5-flash"
+    )
+    _ = ocr_group.add_argument(
+        "--gemini_batch_size",
+        type=int,
+        default=100,
+        help="Gemini batch size for processing multiple images. Default: 100"
+    )
+    _ = ocr_group.add_argument(
+        "--gemini_prompt",
+        type=str,
+        default=None,
+        help="Custom context prompt for Gemini OCR processing"
+    )
+    _ = ocr_group.add_argument(
+        "--gemini_max_retries",
+        type=int,
+        default=3,
+        help="Maximum retry attempts for failed Gemini API calls. Default: 3"
+    )
+    _ = ocr_group.add_argument(
+        "--gemini_retry_delay",
+        type=float,
+        default=5.0,
+        help="Delay between Gemini retry attempts in seconds. Default: 5.0"
+    )
+    _ = ocr_group.add_argument(
+        "--gemini_max_workers",
+        type=int,
+        default=3,
+        help="Maximum concurrent workers for Gemini batch processing. Default: 3"
     )
 
     vpy_param_group = parser.add_argument_group(title="VapourSynth")
@@ -255,7 +309,7 @@ def create_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def process_vsf(video_list: list[Path], output_dir: str, vsf: VideoSubFinder):
+def process_vsf(video_list: list[Path], output_dir: str, vsf: VideoSubFinder, ocr_engine: OCREngine):
 
     print("Extracting subtitle images with VideoSubFinder (takes quite a long time) ...")
     video_num = len(video_list)
@@ -278,7 +332,7 @@ def process_vsf(video_list: list[Path], output_dir: str, vsf: VideoSubFinder):
         if vsf.txtimage:
             images_dir = Path(save_vsf_dir) / "TXTImages"
 
-        ocr = OCR_Subtitles(output_subtitles_name=save_name, output_directory=save_dir, images_dir_override=images_dir)
+        ocr = OCR_Subtitles(output_subtitles_name=save_name, output_directory=save_dir, images_dir_override=images_dir, ocr_engine=ocr_engine)
         ocr()
 
     return
@@ -289,6 +343,7 @@ def process_episode_vpy(
     output_directory: str,
     offset_clean: int,
     offset_sub: int,
+    ocr_engine: OCREngine,
     clean_path: str | Path | None = None,
     sub_path: str | Path | None = None,
 ) -> None:
@@ -304,7 +359,7 @@ def process_episode_vpy(
     save_dir = Path(output_directory) / save_name
     save_img_dir = save_dir / "images"
 
-    engine = OCR_Subtitles(save_name, save_dir, save_img_dir)
+    engine = OCR_Subtitles(save_name, save_dir, save_img_dir, ocr_engine)
 
     if engine.images_dir.exists() and any(engine.images_dir.iterdir()):
         print(f"Removing existing images directory: {engine.images_dir}")
@@ -370,14 +425,15 @@ def main():
     parser = create_arg_parser()
     args = parser.parse_args()
 
-    engine = Engine(args.engine)
+    engine: Engine = args.engine
+    ocr_engine: OCREngine = create_ocr_engine(args.ocr_engine, args)
     output_dir: str = args.output_dir
 
     if args.img_dir:
         subtitle_name = args.output_subtitles
         if args.output_subtitles is None:
             subtitle_name = "output_subtitles"
-        ocr = OCR_Subtitles(subtitle_name, output_dir, args.img_dir)
+        ocr = OCR_Subtitles(subtitle_name, output_dir, args.img_dir, ocr_engine)
         ocr()
         return
 
@@ -397,7 +453,7 @@ def main():
         else:
             video_list = [Path(video_path)]
 
-        process_vsf(video_list, output_dir, vsf)
+        process_vsf(video_list, output_dir, vsf, ocr_engine=ocr_engine)
 
     elif engine == Engine.VAPOURSYNTH:
         video_formats = [".mp4", ".avi", ".mov", ".mkv"]
@@ -422,6 +478,7 @@ def main():
                 offset_sub=args.offset_sub,
                 sub_path=args.hardsub,
                 clean_path=args.clean,
+                ocr_engine=ocr_engine
             )
 
     print("Done")

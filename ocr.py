@@ -1,11 +1,8 @@
 import warnings
-from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict
 
 from ass import AssSubtitle
-from gglens import GoogleLens
-#from gemini import Gemini
+from engine import OCREngine
 from utils import text_cleanup, timecode_key
 
 
@@ -17,15 +14,11 @@ class OCR_Subtitles:
         output_subtitles_name: str | Path, 
         output_directory: str | Path, 
         images_dir_override: str | Path,
-        ocr_engine: OCREngine | None = None
+        ocr_engine: OCREngine,
     ) -> None:
         self.ass_dict: dict[str, AssSubtitle] = {}
 
-        if ocr_engine is None:
-            self.ocr_engine = GoogleLens()
-            # self.ocr_engine = Gemini()
-        else:
-            self.ocr_engine = ocr_engine
+        self.ocr_engine = ocr_engine
 
         self.images_dir, self.output_file_path = self._process_file(
             output_subtitles_name, output_directory, images_dir_override
