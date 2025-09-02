@@ -1,19 +1,21 @@
+import json
 import os
+import random
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List
-import json
+from warnings import warn
 
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
-from warnings import warn
-
+from engine import OCREngine
 from progress import BatchSpeedColumn
-
 from utils import collect_images, timecode_key
 
 
-class Gemini:
+class Gemini(OCREngine):
     OUTPUT_PROMT = """
 IMPORTANT: Respond with a single JSON array. Each element in the array must be a JSON object with two keys.
 1. "image_order": The zero-based index of the image in the input sequence.
@@ -48,7 +50,10 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
         self, 
         model_name: str = "gemini-2.5-flash", 
         batch_size: int = 100,
-        promt: str = None
+        max_workers: int = 3,
+        promt: str = None,
+        max_retries: int = 3,
+        retry_delay: float = 2.0
     ):
         try:
             from google import genai
@@ -63,8 +68,12 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
             self.client = genai.Client(api_key=api_key)
             self.model_name = model_name
             self.batch_size = batch_size
+            self.max_workers = max_workers
             self.console = Console()
             self.promt = (self.DEFAULT_PROMT if not promt else promt) + "\n\n" + self.OUTPUT_PROMT
+
+            self.max_retries = max_retries
+            self.retry_delay = retry_delay
 
         except ImportError:
             raise ImportError("google-genai package is required for GeminiOCREngine"
@@ -95,56 +104,82 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
             console=self.console,
         ) as progress:
             task = progress.add_task(f"Processing {len(images)} images in batches", total=len(batches))
-            
-            for batch_idx, batch in enumerate(batches):
-                self.console.print(f"[blue]Processing batch {batch_idx + 1}/{len(batches)} ({len(batch)} images)[/blue]")
-                batch_results = self._process_batch([str(img) for img in batch])
-                
-                for img_path in batch:
-                    img_name = img_path.name
-                    results[img_name] = batch_results.get(str(img_path), "")
-                
-                progress.update(task, advance=1)
+
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                future_to_batch = {
+                    executor.submit(self._process_batch, [str(img) for img in batch], batch_idx + 1): (batch_idx, batch)
+                    for batch_idx, batch in enumerate(batches)
+                }
+
+                for future in as_completed(future_to_batch):
+                    batch_idx, batch = future_to_batch[future]
+                    
+                    try:
+                        batch_results = future.result()
+                        
+                        for img_path in batch:
+                            img_name = img_path.name
+                            results[img_name] = batch_results.get(str(img_path), "")
+                            
+                    except Exception as e:
+                        self.console.print(f"[red]Batch {batch_idx + 1} failed: {e}[/red]")
+                        for img_path in batch:
+                            results[img_path.name] = ""
+
+                    progress.update(task, advance=1)
         
         return dict(sorted(results.items(), key=timecode_key))
 
     
-    def _process_batch(self, img_paths: List[str]) -> Dict[str, str]:
-        try:
-            import PIL.Image
-            
-            images = []
-            valid_paths = []
-        
-            for path in img_paths:
-                try:
-                    img = PIL.Image.open(path)
-                    images.append(img)
-                    valid_paths.append(path)
-                except Exception as e:
-                    print(f"Error loading image {path}: {e}")
-            
-            if not images:
-                return {}
-        
-            
-            contents = images + [f"Number of input image={len(valid_paths)}"] + [self.promt]
-            
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=contents,
-                config={
-                    "temperature": 0.3,
-                    # "top_p": 0.95,
-                    # "top_k": 40,
-                    "response_mime_type": "application/json",
-                    "thinking_config": {
-                        "include_thoughts": False,
-                        "thinking_budget": 0
-                    }
-                }
-            )
+    def _process_batch(self, img_paths: List[str], batch_num: int) -> Dict[str, str]:
+        for attempt in range(self.max_retries + 1):
             try:
+                if attempt > 0:
+                    jitter = random.uniform(0.5, 1.5)
+                    total_delay = self.retry_delay * jitter
+                    
+                    self.console.print(f"[yellow]Batch {batch_num} - Retry {attempt}/{self.max_retries} after {total_delay:.1f}s delay[/yellow]")
+                    time.sleep(total_delay)
+
+                import PIL.Image
+                
+                images = []
+                valid_paths = []
+            
+                for path in img_paths:
+                    try:
+                        img = PIL.Image.open(path)
+                        images.append(img)
+                        valid_paths.append(path)
+                    except Exception as e:
+                        print(f"Error loading image {path}: {e}")
+                
+                if not images:
+                    return {}
+                
+                contents = images + [f"Number of input image={len(valid_paths)}"] + [self.promt]
+                
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=contents,
+                    config={
+                        "temperature": 0.3,
+                        # "top_p": 0.95,
+                        # "top_k": 40,
+                        "response_mime_type": "application/json",
+                        "thinking_config": {
+                            "include_thoughts": False,
+                            "thinking_budget": 0
+                        }
+                    }
+                )
+
+                if not response or not response.text:
+                    raise Exception("Empty response from Gemini API")
+                
+                if "quota exceeded" in response.text.lower():
+                    raise Exception("API quota exceeded")
+                
                 parsed_results = self._parse_json_response(response.text)
                 results = {}
 
@@ -158,22 +193,23 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
                         img_path = valid_paths[image_order]
                         results[img_path] = extracted_text
                 
+                if attempt > 0:
+                    self.console.print(f"[green]Batch {batch_num} - Retry {attempt} succeeded![/green]")
+
                 return results
                 
             except Exception as e:
-                print(f"Error parsing batch response: {e}")
-                return {path: "" for path in valid_paths}
-                
-        except Exception as e:
-            print(f"Error processing batch: {e}")
-            return {path: "" for path in img_paths}
+                if attempt == self.max_retries:
+                    self.console.print(f"[red]Batch {batch_num} - Final attempt failed: {e}[/red]")
+                    return {path: "" for path in img_paths}
+                else:
+                    self.console.print(f"[yellow]Batch {batch_num} - Attempt {attempt + 1} failed: {e}[/yellow]")
+                    continue
     
     def _parse_json_response(self, raw_response: str) -> List[Dict]:
         # direct parsing
         try:
             return json.loads(raw_response)
-        except json.JSONDecodeError:
-            pass
-        
-        print(f"Failed to parse JSON response: {raw_response[:500]}...")
-        return []
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON response: {raw_response[:500]}...")
+            return None
