@@ -8,13 +8,14 @@ from httpx import Client
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
+from engine import OCREngine
 from lens import (AppliedFilter, LensOverlayFilterType, LensOverlayRoutingInfo, LensOverlayServerRequest,
                   LensOverlayServerResponse, Platform, Surface,)
 from progress import ImageSecondSpeedColumn
 from utils import collect_images, get_image_raw_bytes_and_dims, timecode_key
 
 
-class GoogleLens:
+class GoogleLens(OCREngine):
     LENS_ENDPOINT: str = "https://lensfrontend-pa.googleapis.com/v1/crupload"
 
     HEADERS: dict[str, str] = {

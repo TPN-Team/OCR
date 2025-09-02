@@ -9,19 +9,6 @@ from gglens import GoogleLens
 from utils import text_cleanup, timecode_key
 
 
-class OCREngine(ABC):
-    """Abstract base class for OCR engines."""
-    
-    @abstractmethod
-    def __call__(self, images_dir: Path) -> Dict[str, str]:
-        pass
-    
-    @property
-    @abstractmethod
-    def engine_name(self) -> str:
-        pass
-
-
 class OCR_Subtitles:
     THREADS: int = 16
 
