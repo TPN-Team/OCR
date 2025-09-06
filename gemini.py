@@ -1,12 +1,14 @@
+import base64
 import json
 import os
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 from warnings import warn
 
+from openai import OpenAI
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
@@ -17,22 +19,22 @@ from utils import collect_images, timecode_key
 
 class Gemini(OCREngine):
     OUTPUT_PROMT = """
-IMPORTANT: Respond with a single JSON array. Each element in the array must be a JSON object with two keys.
-1. "image_order": The zero-based index of the image in the input sequence.
+IMPORTANT: Respond with a single JSON array. Each element in the array must be a JSON object with two keys. Don't merge any subtitles you extract, give 1 input image is 1 subtitles. You dont need to care about image name.
+1. "image_order": Order of input image start from 1.
 2. "extracted_text": The extracted subtitle text as a string. If no subtitle is found, this must be "".
 Example response for 3 images, where the second image has no subtitles (you cant detect) and the third has two lines:
 ```json
 [
   {
-    "image_order": 0,
+    "image_order": 1,
     "extracted_text": "This is the subtitle from the first image."
   },
   {
-    "image_order": 1,
+    "image_order": 2,
     "extracted_text": ""
   },
   {
-    "image_order": 2,
+    "image_order": 3,
     "extracted_text": "This is a subtitle\\nwith two lines."
   }
 ]
@@ -41,36 +43,35 @@ Do not include any explanatory text or markdown formatting outside of the main J
 """
     DEFAULT_PROMT = """
 You are an intelligent OCR agent specializing in subtitle extraction. Your task is to analyze a series of pre-cropped images from video frames and accurately identify and extract ONLY the subtitle text.
-These images may contain other text that is part of the video scene (e.g., signs, logos, on-screen graphics). You must differentiate between subtitle text and scene text. Subtitle text typically has a consistent style and placement within the cropped area.
-For each image, provide the extracted subtitle text. Preserve original line breaks within the subtitle text, using the '\\n' character. If an image contains no subtitle text, or if you cannot confidently identify any text as a subtitle, return an empty string for the "text" field.
-Sometime it will have duplicate result, dont touch just return result of OCR.
+hese images may contain other text that is part of the video scene (e.g., signs, logos, on-screen graphics). You must differentiate between subtitle text and scene text. Subtitle text typically has a consistent style and placement within the cropped area.
+For each image, provide the extracted subtitle text. If an image contains no subtitle text, or if you cannot confidently identify any text as a subtitle, return an empty string for the "text" field.
 """
 
     def __init__(
         self, 
         model_name: str = "gemini-2.5-flash", 
-        batch_size: int = 100,
+        batch_size: int = 50,
         max_workers: int = 3,
         promt: str = None,
-        max_retries: int = 3,
+        max_retries: int = 5,
         retry_delay: float = 2.0
     ):
-        try:
-            from google import genai
-            
+        try:            
             api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
             if not api_key:
                 raise ValueError(
                     "Gemini API key not found. Please set GEMINI_API_KEY or GOOGLE_API_KEY "
                     "environment variable or provide api_key parameter."
                 )
-            
-            self.client = genai.Client(api_key=api_key)
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+            )
             self.model_name = model_name
             self.batch_size = batch_size
             self.max_workers = max_workers
             self.console = Console()
-            self.promt = (self.DEFAULT_PROMT if not promt else promt) + "\n\n" + self.OUTPUT_PROMT
+            self.promt =  (self.DEFAULT_PROMT if not promt else promt) + "\n\n" + self.OUTPUT_PROMT
 
             self.max_retries = max_retries
             self.retry_delay = retry_delay
@@ -107,7 +108,7 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
 
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 future_to_batch = {
-                    executor.submit(self._process_batch, [str(img) for img in batch], batch_idx + 1): (batch_idx, batch)
+                    executor.submit(self._process_batch, batch, batch_idx + 1): (batch_idx, batch)
                     for batch_idx, batch in enumerate(batches)
                 }
 
@@ -117,9 +118,7 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
                     try:
                         batch_results = future.result()
                         
-                        for img_path in batch:
-                            img_name = img_path.name
-                            results[img_name] = batch_results.get(str(img_path), "")
+                        results.update(batch_results)
                             
                     except Exception as e:
                         self.console.print(f"[red]Batch {batch_idx + 1} failed: {e}[/red]")
@@ -129,9 +128,27 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
                     progress.update(task, advance=1)
         
         return dict(sorted(results.items(), key=timecode_key))
-
     
-    def _process_batch(self, img_paths: List[str], batch_num: int) -> Dict[str, str]:
+    def _encode_image(self, image_path: Path) -> Optional[str]:
+        try:
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+        except Exception as e:
+            self.console.print(f"[red]Failed to encode {image_path.name}: {e}[/red]")
+            return None
+        
+    def _encode_images(self, img_paths: List[Path]) -> List[Tuple[str, str]]:
+        encoded_images = []
+        
+        for path in img_paths:
+            encoded = self._encode_image(path)
+            if encoded is not None:
+                encoded_images.append((encoded, path.name))
+    
+        return encoded_images
+    
+    def _process_batch(self, img_paths: List[Path], batch_num: int) -> Dict[str, str]:
+        encoded_images = []
         for attempt in range(self.max_retries + 1):
             try:
                 if attempt > 0:
@@ -140,62 +157,81 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
                     
                     self.console.print(f"[yellow]Batch {batch_num} - Retry {attempt}/{self.max_retries} after {total_delay:.1f}s delay[/yellow]")
                     time.sleep(total_delay)
+                
+                if not encoded_images:
+                    encoded_images: Dict[str, str] = self._encode_images(img_paths)
+                            
+                metadata = f"Number of input images: {len(encoded_images)}\n"
+                full_prompt = metadata + self.promt
 
-                import PIL.Image
-                
-                images = []
-                valid_paths = []
-            
-                for path in img_paths:
-                    try:
-                        img = PIL.Image.open(path)
-                        images.append(img)
-                        valid_paths.append(path)
-                    except Exception as e:
-                        print(f"Error loading image {path}: {e}")
-                
-                if not images:
-                    return {}
-                
-                contents = images + [f"Number of input image={len(valid_paths)}"] + [self.promt]
-                
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=contents,
-                    config={
-                        "temperature": 0.3,
-                        # "top_p": 0.95,
-                        # "top_k": 40,
-                        "response_mime_type": "application/json",
-                        "thinking_config": {
-                            "include_thoughts": False,
-                            "thinking_budget": 0
-                        }
+                content = [
+                    {
+                        "type": "text",
+                        "text": full_prompt
                     }
-                )
+                ]
 
-                if not response or not response.text:
-                    raise Exception("Empty response from Gemini API")
+                image_names: List[str] = []
+                for n, (encoded_image, image_name) in enumerate(encoded_images, 1):
+                    content.append({
+                        "type": "text",
+                        "text": f"Image {n}:"
+                    })
+                    image_format = "jpeg"
+                    if image_name.lower().endswith(('.png',)):
+                        image_format = "png"
+                    elif image_name.lower().endswith(('.webp',)):
+                        image_format = "webp"
+                    
+                    image_names.append(image_name)
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/{image_format};base64,{encoded_image}"
+                        }
+                    })
+                                
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": content
+                        }
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.3
+                )
+                    
+                response_content = response.choices[0].message.content
+                    
+                if "high load" in response_content.lower():
+                    raise Exception("Gemini API reported high load")
                 
-                if "quota exceeded" in response.text.lower():
+                if "quota exceeded" in response_content.lower():
                     raise Exception("API quota exceeded")
                 
-                parsed_results = self._parse_json_response(response.text)
+                parsed_results = self._parse_json_response(response_content)
                 results = {}
-
-                if len(parsed_results) != len(valid_paths):
-                    warn("Model return missmatch array, result maybe wrong.")
+                if len(parsed_results) != len(img_paths):
+                    raise Exception("Model return missmatch array, result maybe wrong.")
                 if isinstance(parsed_results, list):
                     for item in parsed_results:
                         image_order = item.get('image_order')
                         extracted_text = item.get('extracted_text', '')
 
-                        img_path = valid_paths[image_order]
-                        results[img_path] = extracted_text
+                        if image_order is not None and 1 <= image_order <= len(img_paths):
+                            image_name = image_names[image_order - 1]
+                            results[image_name] = extracted_text
+                        else:
+                            warn(f"Invalid image_order: {image_order}")
                 
+                    for image_name in image_names:
+                        if image_name not in results:
+                            warn(f"No result found for image: {image_name}")
+
                 if attempt > 0:
                     self.console.print(f"[green]Batch {batch_num} - Retry {attempt} succeeded![/green]")
-
                 return results
                 
             except Exception as e:
@@ -205,11 +241,17 @@ Sometime it will have duplicate result, dont touch just return result of OCR.
                 else:
                     self.console.print(f"[yellow]Batch {batch_num} - Attempt {attempt + 1} failed: {e}[/yellow]")
                     continue
-    
+
     def _parse_json_response(self, raw_response: str) -> List[Dict]:
         # direct parsing
         try:
-            return json.loads(raw_response)
+            result = json.loads(raw_response)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict) and 'results' in result:
+                return result['results']
+            else:
+                raise json.JSONDecodeError(f"Unexpected JSON structure: {type(result)}", raw_response, 0)
         except json.JSONDecodeError as e:
             print(f"Failed to parse JSON response: {raw_response[:500]}...")
             return None

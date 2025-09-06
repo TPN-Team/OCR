@@ -63,8 +63,8 @@ def create_arg_parser() -> argparse.ArgumentParser:
     _ = ocr_group.add_argument(
         "--gemini_batch_size",
         type=int,
-        default=100,
-        help="Gemini batch size for processing multiple images. Default: 100"
+        default=50,
+        help="Gemini batch size for processing multiple images. Default: 50"
     )
     _ = ocr_group.add_argument(
         "--gemini_prompt",
@@ -75,7 +75,7 @@ def create_arg_parser() -> argparse.ArgumentParser:
     _ = ocr_group.add_argument(
         "--gemini_max_retries",
         type=int,
-        default=3,
+        default=5,
         help="Maximum retry attempts for failed Gemini API calls. Default: 3"
     )
     _ = ocr_group.add_argument(
