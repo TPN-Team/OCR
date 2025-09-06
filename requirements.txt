@@ -3,3 +3,4 @@ rich>=13.9.4
 # protobuf>=5.26.1
 pillow>=11.1.0 
 betterproto[compiler]==2.0.0b7
+openai>=1.106.1

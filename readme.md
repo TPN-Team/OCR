@@ -9,7 +9,7 @@
   - [Usage](#usage)
     - [Vapoursynth Method](#vapoursynth-method)
     - [VideoSubFinder Method](#videosubfinder-method)
-  - [TODO](#todo)
+    - [OCR Engine](#ocr-engine)
   - [Acknowledgement](#acknowledgement)
 
 # TPN-Team's OCR tool
@@ -56,10 +56,10 @@ Step 6: Install vsrepo
 `git clone https://github.com/vapoursynth/vsrepo`
 
 Step 7: Install vapoursynth plugins:
-`python ./vsrepo/vsrepo.py install acrop hysteresis lsmas misc tcanny tedgemask resize2 imwri akarin vszip`
+`python ./vsrepo/vsrepo.py install acrop hysteresis bestsource misc tcanny tedgemask resize2 imwri akarin vszip`
 
 Step 8: Install vsjetpack
-`pip install vsjetpack vspreview`
+`pip install vsjetpack==0.6.2 vspreview`
 
 ### For Arch linux
 
@@ -86,7 +86,7 @@ Step 5: Install VapourSynth + ffmpeg: `yay -S vapoursynth ffmpeg`
 Step 6: Install vapoursynth plugins:
 
 ```bash
-yay -S vapoursynth-plugin-imwri-git vapoursynth-plugin-lsmashsource-git vapoursynth-plugin-misc-git vapoursynth-plugin-resize2-git vapoursynth-plugin-tcanny-git vapoursynth-plugin-tedgemask-git
+yay -S vapoursynth-plugin-imwri-git  vapoursynth-plugin-bestsource-git vapoursynth-plugin-misc-git vapoursynth-plugin-resize2-git vapoursynth-plugin-tcanny-git vapoursynth-plugin-tedgemask-git vapoursynth-plugin-vszip-git
 git clone https://github.com/vapoursynth/vsrepo
 # Install hysteresis plugin
 sudo python ./vsrepo/vsrepo.py update
@@ -98,7 +98,7 @@ cp -R /usr/include/vapoursynth/*.h ./vapoursynth-autocrop/
 # Build and install acrop plugin
 cd ./vapoursynth-autocrop/ && sudo g++ -std=c++11 -shared -fPIC -O2 ./autocrop.cpp -o /usr/lib/vapoursynth/libautocrop.so && cd ..
 # Install vsjetpack
-pip install vsjetpack vspreview
+pip install vsjetpack==0.6.2 vspreview
 ```
 
 ## Usage
@@ -152,9 +152,35 @@ For more VideoSubFinder tunning param.
 python run.py --help
 ```
 
-## TODO
-
-- Implement concat OCR (Merge an amount of image into one and OCR then get result base on coordinates. This would have better performance) (Need help).
+### OCR Engine
+```sh
+OCR Engine Settings:
+  --ocr_engine OCR_ENGINE
+                        Select OCR engine. Choices: ['gglens', 'gemini']. Default: gglens
+  --gglens_thread GGLENS_THREAD
+                        Google Lens OCR threads.
+  --gemini_model GEMINI_MODEL
+                        Gemini model name. Default: gemini-2.5-flash
+  --gemini_batch_size GEMINI_BATCH_SIZE
+                        Gemini batch size for processing multiple images. Default: 50
+  --gemini_prompt GEMINI_PROMPT
+                        Custom context prompt for Gemini OCR processing
+  --gemini_max_retries GEMINI_MAX_RETRIES
+                        Maximum retry attempts for failed Gemini API calls. Default: 3
+  --gemini_retry_delay GEMINI_RETRY_DELAY
+                        Delay between Gemini retry attempts in seconds. Default: 5.0
+  --gemini_max_workers GEMINI_MAX_WORKERS
+                        Maximum concurrent workers for Gemini batch processing. Default: 3
+```
+For Gemini need to set GOOGLE_API_KEY or GEMINI_API_KEY in env. Example:
+Windows with Powershell:
+```powershell
+$env:GOOGLE_API_KEY = "your key"
+```
+Linux with Bash
+```sh
+export GOOGLE_API_KEY="your key"
+```
 
 ## Acknowledgement
 
